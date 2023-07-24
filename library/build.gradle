@@ -2,7 +2,7 @@ plugins {
     id 'com.android.library'
     id 'org.jetbrains.kotlin.android'
     id "com.google.devtools.ksp" version "1.7.10-1.0.6"
-    id "com.vanniktech.maven.publish" version "0.22.0"
+    id 'maven-publish'
 }
 
 android {
@@ -33,6 +33,58 @@ android {
     }
 
     buildToolsVersion '32.0.0'
+}
+
+// 源代码一起打包
+task androidSourcesJar(type: Jar) {
+    archiveClassifier.set('sources')
+//    from android.sourceSets.main.java.sourceFiles //看不到源代码
+    from android.sourceSets.main.java.srcDirs
+}
+artifacts {
+    archives androidSourcesJar
+}
+afterEvaluate {
+    publishing {
+        repositories {
+            maven {
+                url "https://gitlab.mochilabs.com.au/api/v4/projects/5/packages/maven"
+                name "GitLab"
+                credentials(HttpHeaderCredentials) {
+                    name = "Private-Token"
+                    value = "WYfVzJ7Ts1efVECYS7zs"
+                    println(System.getenv("LOGNAME"))
+                }
+                authentication {
+                    header(HttpHeaderAuthentication)
+                }
+            }
+        }
+
+        publications {
+            library(MavenPublication) {
+//                from components.java
+                groupId "org.casdoor" // 包名
+                artifactId "auth" // module的名字   这个不配置的话，默认为 library 的名字，
+                version "1.0.0" // 版本号
+                artifact androidSourcesJar
+                artifact("$buildDir/outputs/aar/library-release.aar")
+                //  这里需要注意，修改成你生成的aar 名字，一般是[Library的名字]-release.aar
+
+//                //maven-publish does not capture dependencies from this file
+                pom.withXml {  // 这里的照抄，
+                    def dependenciesNode = asNode().appendNode('dependencies')
+                    // Iterate over the api dependencies (we don't want the test ones), adding a <dependency> node for each
+                    configurations.api.allDependencies.each {
+                        def dependencyNode = dependenciesNode.appendNode('implementation')
+                        dependencyNode.appendNode('groupId', it.group)
+                        dependencyNode.appendNode('artifactId', it.name)
+                        dependencyNode.appendNode('version', it.version)
+                    }
+                }
+            }
+        }
+    }
 }
 
 dependencies {
