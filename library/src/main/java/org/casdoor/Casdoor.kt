@@ -138,31 +138,16 @@ class Casdoor(private val config: CasdoorConfig) {
      * Logout.
      */
     fun logout(idToken: String, state: String? = null): Boolean {
-        var httpUrl = "${config.apiEndpoint}login/oauth/logout".toHttpUrlOrNull()
+        var httpUrl = "${config.endpoint}api/logout".toHttpUrlOrNull()
         httpUrl ?: throw IllegalArgumentException("Invalid URL")
         httpUrl = httpUrl.newBuilder()
             .addQueryParameter("id_token_hint", idToken)
             .addQueryParameter("state", state ?: config.appName)
+            .addQueryParameter("post_logout_redirect_uri", "inks:/")
             .build()
-
         client.newCall(Request.Builder().url(httpUrl).get().build()).execute().use {
-            if (!it.isSuccessful) throw IOException("Unexpected code $it")
-
-            try {
-                val casdoorResponse: CasdoorNoDataResponse? =
-                    casdoorNoDataResponseAdaptor.fromJson(it.body!!.source())
-                if (casdoorResponse?.isSuccessful() == false) {
-                    throw IOException("response error: $it")
-                }
-
-                val isAffected = casdoorResponse?.data
-                return (isAffected != null && isAffected == "Affected")
-            } catch (e: Exception) {
-                throw IOException("response error: $it")
-            }
-
+            return it.isRedirect
         }
-
     }
 
     /**
@@ -172,7 +157,7 @@ class Casdoor(private val config: CasdoorConfig) {
         val request = Request.Builder()
             .url("https://door.casdoor.com/api/userinfo?scope=profile")
             .header("Authorization", "Bearer $idToken")
-            .build();
+            .build()
 
         client.newCall(request).execute().use {
             if (!it.isSuccessful) throw IOException("Unexpected code $it")
